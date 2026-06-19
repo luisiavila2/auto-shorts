@@ -51,14 +51,23 @@ export function chunkClip(clip, maxWords) {
   const groups = [];
   for (let i = 0; i < words.length; i += maxWords) groups.push(words.slice(i, i + maxWords));
   const totalChars = words.reduce((s, w) => s + w.length, 0) || 1;
+  const n = groups.length;
   const out = [];
   let acc = 0;
   groups.forEach((g, i) => {
     const chars = g.reduce((s, w) => s + w.length, 0);
-    let dur = i === groups.length - 1
-      ? clip.durMs - acc
-      : Math.round(clip.durMs * (chars / totalChars));
-    dur = Math.max(200, dur);
+    let dur;
+    if (i === n - 1) {
+      // Último chunk: consume el tiempo restante sin padding mínimo
+      // (evita que los subtítulos excedan la duración real del clip)
+      dur = Math.max(80, clip.durMs - acc);
+    } else {
+      // Chunks intermedios: proporcional pero dejando al menos 120ms para cada uno posterior
+      const remaining = n - 1 - i;
+      const proportional = Math.round(clip.durMs * (chars / totalChars));
+      const maxAllowed  = clip.durMs - acc - remaining * 120;
+      dur = Math.max(150, Math.min(proportional, maxAllowed));
+    }
     out.push({ text: g.join(' '), startMs: clip.startMs + acc, durMs: dur });
     acc += dur;
   });

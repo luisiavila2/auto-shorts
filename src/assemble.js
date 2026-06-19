@@ -15,7 +15,7 @@
 import fs from 'fs';
 import path from 'path';
 import { ffmpeg } from './util/ff.js';
-import { buildDrawtextVf } from './render/subtitles.js';
+import { buildDrawtextVf, chunkClip } from './render/subtitles.js';
 
 // Fuentes candidatas para drawtext (busca la primera disponible)
 const FONT_CANDIDATES = [
@@ -90,7 +90,14 @@ export async function assemble(o) {
   const voice = await buildVoiceTrack(clips, workDir, gapMs);
 
   const last = clips[clips.length - 1];
-  const totalSec = (last.startMs + last.durMs) / 1000 + 1.2;
+  // Calcular totalSec desde los chunks reales de subtítulos para que el video
+  // nunca termine antes de que el último subtítulo termina de mostrarse.
+  const maxWordsForTiming = height > width ? 4 : 7;
+  const allChunked   = clips.flatMap(c => chunkClip(c, maxWordsForTiming));
+  const lastChunk    = allChunked[allChunked.length - 1];
+  const subEndMs     = lastChunk.startMs + lastChunk.durMs;
+  const voiceEndMs   = last.startMs + last.durMs;
+  const totalSec     = Math.max(voiceEndMs, subEndMs) / 1000 + 1.5;
 
   // 2) Preparar fuente para drawtext (copia Arial.ttf al workDir)
   const fontFile = prepareFont(workDir);
@@ -158,14 +165,26 @@ export async function assemble(o) {
   const subtitleVf = buildDrawtextVf(clips, { width, height, fontFile: fontFile || undefined });
   if (subtitleVf) vf += `,${subtitleVf}`;
 
-  // 7) Watermark / copyright
+  // 7) Watermark / copyright — visible pero sutil (esquina inferior derecha)
   if (o.watermark) {
-    const wm = escapeDrawtextSimple(o.watermark);
-    const wmFs = Math.round(width * 0.022);
-    const wmX  = `w-tw-${Math.round(width * 0.03)}`;
-    const wmY  = `h-th-${Math.round(height * 0.015)}`;
+    const wm  = escapeDrawtextSimple(o.watermark);
+    const wmFs = Math.round(width * 0.028);
+    const wmX  = `w-tw-${Math.round(width * 0.035)}`;
+    const wmY  = `h-th-${Math.round(height * 0.018)}`;
     const ff   = fontFile || 'Arial.ttf';
-    vf += `,drawtext=text='${wm}':fontfile='${ff}':fontsize=${wmFs}:fontcolor=white@0.35:x=${wmX}:y=${wmY}`;
+    vf += `,` + [
+      `drawtext=text='${wm}'`,
+      `fontfile='${ff}'`,
+      `fontsize=${wmFs}`,
+      `fontcolor=white@0.82`,
+      `x=${wmX}`,
+      `y=${wmY}`,
+      `borderw=3`,
+      `bordercolor=black@0.9`,
+      `shadowx=2`,
+      `shadowy=2`,
+      `shadowcolor=black@0.8`,
+    ].join(':');
   }
 
   // 8) filter_complex unificado (video + audio en un único grafo)
