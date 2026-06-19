@@ -44,28 +44,58 @@ function karaokeText(text, durMs) {
   }).join('').trimEnd();
 }
 
-/** Parte una frase en trozos cortos, repartiendo duración por caracteres. */
-export function chunkClip(clip, maxWords) {
+/**
+ * Parte una frase en trozos cortos respetando TANTO un límite de palabras
+ * COMO un límite de caracteres (para evitar que el texto supere el ancho del frame).
+ *
+ * @param {object} clip      - { text, startMs, durMs }
+ * @param {number} maxWords  - máximo de palabras por chunk
+ * @param {number} maxChars  - máximo de caracteres por chunk (incl. espacios)
+ */
+export function chunkClip(clip, maxWords, maxChars = 999) {
   const words = clip.text.split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return [clip];
+  if (words.length <= 1) return [clip];
+
+  // Construir grupos palabra a palabra
   const groups = [];
-  for (let i = 0; i < words.length; i += maxWords) groups.push(words.slice(i, i + maxWords));
+  let current = [];
+  let currentChars = 0;
+
+  for (const word of words) {
+    // Cuántos chars suma esta palabra (+ espacio separador si ya hay palabras)
+    const added = current.length > 0 ? 1 + word.length : word.length;
+    const overWords = current.length >= maxWords;
+    const overChars = current.length > 0 && currentChars + added > maxChars;
+
+    if (current.length > 0 && (overWords || overChars)) {
+      groups.push(current);
+      current = [word];
+      currentChars = word.length;
+    } else {
+      current.push(word);
+      currentChars += added;
+    }
+  }
+  if (current.length) groups.push(current);
+  if (groups.length === 1) return [clip];
+
+  // Distribuir duración proporcionalmente (por cantidad de chars de cada grupo)
   const totalChars = words.reduce((s, w) => s + w.length, 0) || 1;
   const n = groups.length;
   const out = [];
   let acc = 0;
+
   groups.forEach((g, i) => {
     const chars = g.reduce((s, w) => s + w.length, 0);
     let dur;
     if (i === n - 1) {
-      // Último chunk: consume el tiempo restante sin padding mínimo
-      // (evita que los subtítulos excedan la duración real del clip)
+      // Último chunk: usa el tiempo restante (sin padding → subtítulos nunca superan el video)
       dur = Math.max(80, clip.durMs - acc);
     } else {
-      // Chunks intermedios: proporcional pero dejando al menos 120ms para cada uno posterior
+      // Chunks intermedios: proporcional, reservando mínimo 120ms para cada uno posterior
       const remaining = n - 1 - i;
       const proportional = Math.round(clip.durMs * (chars / totalChars));
-      const maxAllowed  = clip.durMs - acc - remaining * 120;
+      const maxAllowed   = clip.durMs - acc - remaining * 120;
       dur = Math.max(150, Math.min(proportional, maxAllowed));
     }
     out.push({ text: g.join(' '), startMs: clip.startMs + acc, durMs: dur });
@@ -146,9 +176,15 @@ export function buildDrawtextVf(clips, opts = {}) {
   const width    = opts.width    || 1080;
   const height   = opts.height   || 1920;
   const vertical = height > width;
-  const fontSize = opts.fontSize || (vertical ? 88 : 64);
+  const fontSize = opts.fontSize || (vertical ? 82 : 62);
   const maxWords = opts.maxWords || (vertical ? 4 : 7);
   const fontFile = opts.fontFile || 'Arial.ttf';
+
+  // maxChars: ancho disponible / ancho promedio de carácter en Arial Bold.
+  // Arial Bold ≈ fontSize × 0.58 px por carácter. Margen lateral 4% c/lado.
+  const usableW  = Math.floor(width * 0.92);
+  const charW    = fontSize * 0.58;
+  const maxChars = opts.maxChars || Math.floor(usableW / charW);
 
   // Posición: parte baja pero dejando espacio para no cortar
   const marginV  = opts.marginV  ?? Math.round(height * (vertical ? 0.22 : 0.10));
@@ -156,9 +192,8 @@ export function buildDrawtextVf(clips, opts = {}) {
 
   // Caja de fondo semitransparente debajo del texto (mejor legibilidad sobre video real)
   const boxPad   = Math.round(fontSize * 0.35);
-  const lineH    = Math.round(fontSize * 1.25);
 
-  const chunked = clips.flatMap(c => chunkClip(c, maxWords));
+  const chunked = clips.flatMap(c => chunkClip(c, maxWords, maxChars));
 
   return chunked.map(c => {
     const start = (c.startMs / 1000).toFixed(3);

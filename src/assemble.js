@@ -92,8 +92,12 @@ export async function assemble(o) {
   const last = clips[clips.length - 1];
   // Calcular totalSec desde los chunks reales de subtítulos para que el video
   // nunca termine antes de que el último subtítulo termina de mostrarse.
+  // Usar los mismos límites que buildDrawtextVf para que los chunks coincidan.
   const maxWordsForTiming = height > width ? 4 : 7;
-  const allChunked   = clips.flatMap(c => chunkClip(c, maxWordsForTiming));
+  const fontSizeForTiming = height > width ? 82 : 62;
+  const usableWForTiming  = Math.floor(width * 0.92);
+  const maxCharsForTiming = Math.floor(usableWForTiming / (fontSizeForTiming * 0.58));
+  const allChunked   = clips.flatMap(c => chunkClip(c, maxWordsForTiming, maxCharsForTiming));
   const lastChunk    = allChunked[allChunked.length - 1];
   const subEndMs     = lastChunk.startMs + lastChunk.durMs;
   const voiceEndMs   = last.startMs + last.durMs;
