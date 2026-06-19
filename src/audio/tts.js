@@ -39,7 +39,7 @@ async function edgeSynth(text, outFile, opts) {
     const t = setTimeout(() => reject(new Error('edge timeout')), 25000);
     stream.on('data', c => chunks.push(c));
     stream.on('end', () => { clearTimeout(t); resolve(); });
-    stream.on('error', e => { clearTimeout(t); reject(typeof e === 'string' ? new Error(e) : e); });
+    stream.on('error', e => { clearTimeout(t); reject(e instanceof Error ? e : new Error(typeof e === 'string' ? e : JSON.stringify(e) || 'edge-ws-error')); });
   });
   const buf = Buffer.concat(chunks);
   if (buf.length < 800) throw new Error('edge audio vacío');
@@ -70,7 +70,7 @@ export async function synthLine(text, outFile, opts = {}) {
   if (provider === 'edge') {
     try { await edgeSynth(text, outFile, opts); used = 'edge'; }
     catch (e) {
-      console.log(`        (edge falló: ${e.message} — uso gTTS)`);
+      console.log(`        (edge falló: ${e?.message || String(e)} — uso gTTS)`);
       _edge = null; // forzar reconexión la próxima
       await gttsSynth(text, outFile); used = 'gtts';
     }
