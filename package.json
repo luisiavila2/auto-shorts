@@ -2,17 +2,19 @@
   "name": "auto-shorts",
   "version": "0.1.0",
   "type": "module",
-  "description": "Motor automatizado de YouTube Shorts (guión IA + render + ensamble + subida). Esqueleto base — el contexto del canal se define en config/channels.js.",
+  "description": "Motor automatizado de YouTube: shorts + video largo de sabiduría (Biblia + filosofías). Guión IA + voz Edge TTS + subtítulos karaoke + ffmpeg + subida.",
   "scripts": {
     "run": "node src/run.js",
     "run:upload": "node src/run.js --upload",
     "auth": "node scripts/auth-youtube.js",
-    "post-comments": "node src/post-comments.js"
+    "music": "node scripts/make-music.js",
+    "post-comments": "node src/post-comments.js",
+    "tts-test": "node scripts/test-tts.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
     "dotenv": "^16.6.1",
     "googleapis": "^144.0.0",
-    "playwright": "^1.60.0"
+    "msedge-tts": "^1.3.4"
   }
 }

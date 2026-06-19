@@ -5,4 +5,6 @@ state/
 .env
 .diagnosis/
 logs/
-assets/music/**/*.mp3
+assets/music/*.mp3
+assets/music/*.m4a
+assets/music/*.wav

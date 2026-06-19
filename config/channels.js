@@ -1,24 +1,30 @@
 /* ============================================================
-   Configuración de canales. Cada canal = un MUNDO distinto.
-   El motor es genérico; acá se define la identidad del contenido.
-
-   ⚠️ ESQUELETO: este archivo está a la espera de que definas el
-   tipo de videos del nuevo canal. Los campos de abajo son un
-   placeholder de ejemplo; los ajustamos cuando me digas el tema.
+   Configuración de canales — Sabiduría (Biblia + filosofías).
    ============================================================ */
 
-export const THEMES = {
-  // Definí acá las paletas/estilos visuales del canal.
-};
-
 export const CHANNELS = {
-  // canal1: {
-  //   handle: '@tu-canal',
-  //   displayName: 'Nombre del Canal',
-  //   channelContext: 'Descripción del mundo/tema del canal (lo que lo hace único).',
-  //   genreWeights: { /* ... */ },
-  //   // model: 'claude-sonnet-4-6',   // default: Haiku 4.5 (económico)
-  //   youtubeTokenFile: '.tokens/canal1.json',
-  //   maxPerDay: 7,
-  // },
+  sabiduria: {
+    handle: '@tu-canal-sabiduria',          // ← ajustá al handle real
+    displayName: 'Sabiduría Eterna',
+    channelContext:
+      'Canal de sabiduría y conciencia: cruza enseñanzas de la Biblia con la ' +
+      'filosofía de los grandes pensadores (estoicos, Sócrates, Lao Tsé) para ' +
+      'dar verdades prácticas sobre el miedo, el propósito, el perdón, la calma, ' +
+      'la disciplina y el sentido de la vida. Tono sereno, profundo y esperanzador.',
+
+    // Modelo de guiones. Default Haiku (económico). Para más profundidad: 'claude-sonnet-4-6'.
+    // model: 'claude-sonnet-4-6',
+
+    // Voz Edge TTS (gratis). Otras: es-MX-JorgeNeural, es-ES-AlvaroNeural.
+    voice: 'es-CO-GonzaloNeural',
+
+    // Producción diaria
+    shortsPerDay: 3,
+    longPerDay: 1,
+
+    // Música de fondo (carpeta). Generá pads con: npm run music
+    musicDir: 'assets/music',
+
+    youtubeTokenFile: '.tokens/sabiduria.json',
+  },
 };
