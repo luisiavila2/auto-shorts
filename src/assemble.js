@@ -89,10 +89,9 @@ export async function assemble(o) {
       `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${width}x${height}:fps=${fps},` +
       `setsar=1`;
   } else {
-    // fondo oscuro generado (fallback sin assets). `color` existe en todo ffmpeg.
+    // fondo oscuro sólido (fallback sin assets). `color` existe en todo ffmpeg y es rápido.
     args.push('-f', 'lavfi', '-i', `color=c=#0D1528:s=${width}x${height}:r=${fps}`);
-    // geq aplica gradiente vertical suave: #0b1622 arriba → #1c2a3a abajo
-    vfilter = `geq=r='11+17*Y/H':g='22+20*Y/H':b='34+24*Y/H',format=yuv420p`;
+    vfilter = `format=yuv420p`;
   }
 
   // viñeta sutil + quemar subtítulos
