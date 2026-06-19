@@ -1,0 +1,8 @@
+node_modules/
+output/
+state/
+.tokens/
+.env
+.diagnosis/
+logs/
+assets/music/**/*.mp3

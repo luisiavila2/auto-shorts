@@ -1,0 +1,18 @@
+{
+  "name": "auto-shorts",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Motor automatizado de YouTube Shorts (guión IA + render + ensamble + subida). Esqueleto base — el contexto del canal se define en config/channels.js.",
+  "scripts": {
+    "run": "node src/run.js",
+    "run:upload": "node src/run.js --upload",
+    "auth": "node scripts/auth-youtube.js",
+    "post-comments": "node src/post-comments.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "dotenv": "^16.6.1",
+    "googleapis": "^144.0.0",
+    "playwright": "^1.60.0"
+  }
+}
