@@ -12,14 +12,16 @@ const MEDIA_RE = /\.(jpe?g|png|webp|mp4|mov|webm)$/i;
 function pickFrom(dir) {
   const abs = path.join(ROOT, dir);
   if (!fs.existsSync(abs)) return null;
-  const files = fs.readdirSync(abs).filter(f => {
+  const all = fs.readdirSync(abs).filter(f => {
     if (!MEDIA_RE.test(f) || f.startsWith('.')) return false;
-    // Descarta MP4s rotos o incompletos (< 500 KB) para no crashear ffmpeg
-    if (/\.mp4$/i.test(f) && fs.statSync(path.join(abs, f)).size < 512 * 1024) return false;
+    if (/\.(mp4|mov|webm)$/i.test(f) && fs.statSync(path.join(abs, f)).size < 512 * 1024) return false;
     return true;
   });
-  if (!files.length) return null;
-  return path.join(abs, files[Math.floor(Math.random() * files.length)]);
+  if (!all.length) return null;
+  // Preferir MP4s (videos reales) sobre imágenes estáticas
+  const videos = all.filter(f => /\.(mp4|mov|webm)$/i.test(f));
+  const pool   = videos.length ? videos : all;
+  return path.join(abs, pool[Math.floor(Math.random() * pool.length)]);
 }
 
 /**
