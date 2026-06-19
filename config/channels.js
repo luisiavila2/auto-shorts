@@ -17,6 +17,9 @@ export const CHANNELS = {
 
     // Voz Edge TTS (gratis). Otras: es-MX-JorgeNeural, es-ES-AlvaroNeural.
     voice: 'es-CO-GonzaloNeural',
+    // Provider de TTS: 'edge' (mejor calidad, requiere WS a Microsoft) o 'gtts' (fallback libre).
+    // En este servidor el WS de Edge está bloqueado — usar gtts directamente.
+    ttsProvider: 'gtts',
 
     // Producción diaria
     shortsPerDay: 3,

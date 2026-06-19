@@ -76,6 +76,8 @@ export async function synthLine(text, outFile, opts = {}) {
     }
   } else {
     await gttsSynth(text, outFile); used = 'gtts';
+    // Pausa leve para no saturar gTTS en videos largos (144 frases seguidas).
+    await new Promise(r => setTimeout(r, 350));
   }
 
   const durMs = await probeDurationMs(outFile);

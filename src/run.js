@@ -39,7 +39,7 @@ async function produce(channel, script, slug) {
 
   console.log(`      Narrando ${script.narration.length} frases (TTS)…`);
   const { clips } = await synthLines(script.narration, path.join(workDir, 'voice'), {
-    voice: channel.voice, provider: 'edge', gapMs: GAP_MS,
+    voice: channel.voice, provider: channel.ttsProvider || 'edge', gapMs: GAP_MS,
   });
 
   console.log('      Subtítulos…');
