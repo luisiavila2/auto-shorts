@@ -126,7 +126,7 @@ Register-ScheduledTask `
 
 Write-Host ""
 Write-Host "OK - tareas registradas:" -ForegroundColor Green
-Write-Host ("  $TaskName       -> todos los dias {0:00}:{1:00} (genera y sube 7 videos)" -f $Hour, $Minute) -ForegroundColor Green
+Write-Host ("  $TaskName       -> todos los dias {0:00}:{1:00} (genera y sube 4 videos: 3 shorts + 1 largo)" -f $Hour, $Minute) -ForegroundColor Green
 Write-Host "  $CommentsTaskName -> cada 2h de 10:00 a 23:00 (postea comentarios)" -ForegroundColor Green
 Write-Host ""
 Write-Host "Comandos utiles:" -ForegroundColor Cyan
