@@ -79,15 +79,20 @@ export async function assemble(o) {
   let vfilter;
 
   if (bgImage && fs.existsSync(bgImage)) {
-    // imagen con Ken Burns (zoom lento). Escalamos para cubrir y animamos zoom.
-    args.push('-loop', '1', '-i', path.resolve(bgImage));
-    const frames = Math.ceil(totalSec * fps);
+    // Imagen escalada + leve paneo lento con crop animado (más estable que zoompan en Windows).
+    args.push('-loop', '1', '-t', String(Math.ceil(totalSec + 2)), '-i', path.resolve(bgImage));
+    // Escalar a 1.25× el target para tener margen de paneo sin bordes negros.
+    const sw = Math.round(width * 1.25), sh = Math.round(height * 1.25);
+    const ox = Math.round((sw - width) / 2);   // offset máximo X
+    const oy = Math.round((sh - height) / 2);  // offset máximo Y
     vfilter =
-      `scale=${width * 1.5}:${height * 1.5}:force_original_aspect_ratio=increase,` +
-      `crop=${width * 1.5}:${height * 1.5},` +
-      `zoompan=z='min(zoom+0.00035,1.30)':d=${frames}:` +
-      `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${width}x${height}:fps=${fps},` +
-      `setsar=1`;
+      `scale=${sw}:${sh}:force_original_aspect_ratio=increase,` +
+      `crop=${sw}:${sh},` +
+      // Paneo suave: movimiento sinusoidal lento (período ~60s), sin zoom para no crashear.
+      `crop=${width}:${height}:` +
+        `x='${ox}+${Math.round(ox * 0.5)}*sin(t*0.06)':` +
+        `y='${oy}+${Math.round(oy * 0.5)}*sin(t*0.04+0.8)',` +
+      `fps=${fps},setsar=1`;
   } else {
     // fondo oscuro sólido (fallback sin assets). `color` existe en todo ffmpeg y es rápido.
     args.push('-f', 'lavfi', '-i', `color=c=#0D1528:s=${width}x${height}:r=${fps}`);
