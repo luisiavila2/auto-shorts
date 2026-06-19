@@ -118,7 +118,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 function escapeDrawtext(text) {
   return text
     .replace(/\\/g, '\\\\')        // backslash → \\
-    .replace(/'/g, '’')       // ' → ' (evita cerrar el quote del filtro)
+    .replace(/'/g, '\u2019')       // ' → ' (evita cerrar el quote del filtro)
     .replace(/:/g, '\\:')          // : → \: (separador de opciones en filtros)
     .replace(/%/g, '%%')           // % → %% (drawtext usa % para variables)
     .replace(/[\r\n]+/g, ' ');     // newlines → espacio

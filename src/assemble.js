@@ -1,4 +1,4 @@
-/**
+﻿/**
  * assemble.js — Arma el video final con ffmpeg.
  *
  *   fondo (imagen/video/gradiente) + subtítulos drawtext + voz + música → MP4
@@ -199,7 +199,7 @@ export async function assemble(o) {
 function escapeDrawtextSimple(text) {
   return text
     .replace(/\\/g, '\\\\')
-    .replace(/'/g, '’')  // ' ASCII → ' tipográfico (no rompe quotes del filtro)
+    .replace(/'/g, '\u2019')  // apostrofe ASCII -> tipografico
     .replace(/:/g, '\\:')
     .replace(/%/g, '%%');
 }
