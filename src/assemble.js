@@ -199,7 +199,7 @@ export async function assemble(o) {
 function escapeDrawtextSimple(text) {
   return text
     .replace(/\\/g, '\\\\')
-    .replace(/'/g, ''')
+    .replace(/'/g, '’')  // ' ASCII → ' tipográfico (no rompe quotes del filtro)
     .replace(/:/g, '\\:')
     .replace(/%/g, '%%');
 }
