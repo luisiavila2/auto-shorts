@@ -136,8 +136,10 @@ export async function assemble(o) {
       `fps=${fps},setsar=1`;
   }
 
-  // Subtítulos + watermark
-  vf += `,subtitles=subs.ass`;
+  // format=yuv420p antes de subtitles es CRÍTICO en Windows:
+  // las imágenes JPEG se decodifican como yuvj420p (full-range) y libass/DirectWrite
+  // crashea con 0xC0000005 si recibe ese formato. La conversión explícita lo evita.
+  vf += `,format=yuv420p,subtitles=subs.ass`;
   if (o.watermark) {
     const wm = o.watermark.replace(/'/g, "\\'");
     vf += `,drawtext=text='${wm}':fontsize=${Math.round(width * 0.022)}` +
