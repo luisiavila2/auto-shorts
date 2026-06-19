@@ -1,24 +1,20 @@
 /**
  * visuals.js — elige el fondo visual de un video.
  *
- * Dos estilos (el usuario pidió ambos):
- *   - 'cinematic': imagen cinematográfica de assets/backgrounds/ (naturaleza,
- *     estatuas, cielos, ruinas) con zoom lento (Ken Burns).
- *   - 'sage': rostro de un anciano/sabio de assets/sages/ con zoom muy suave.
- *
- * Si no hay imágenes disponibles, devuelve null y assemble usa un gradiente
- * cinematográfico generado por ffmpeg (fallback, funciona sin assets).
+ * Soporta imágenes (jpg/png) Y videos (mp4/mov/webm).
+ * Los MP4 se usan en bucle durante el video → fondos animados.
+ * Los JPG/PNG se animan con paneo lento en assemble.js.
  */
 import fs from 'fs';
 import path from 'path';
 
 const ROOT = process.cwd();
-const IMG_RE = /\.(jpe?g|png|webp)$/i;
+const MEDIA_RE = /\.(jpe?g|png|webp|mp4|mov|webm)$/i;
 
 function pickFrom(dir) {
   const abs = path.join(ROOT, dir);
   if (!fs.existsSync(abs)) return null;
-  const files = fs.readdirSync(abs).filter(f => IMG_RE.test(f));
+  const files = fs.readdirSync(abs).filter(f => MEDIA_RE.test(f) && !f.startsWith('.'));
   if (!files.length) return null;
   return path.join(abs, files[Math.floor(Math.random() * files.length)]);
 }

@@ -8,3 +8,5 @@ logs/
 assets/music/*.mp3
 assets/music/*.m4a
 assets/music/*.wav
+assets/backgrounds/*.mp4
+assets/sages/*.mp4
