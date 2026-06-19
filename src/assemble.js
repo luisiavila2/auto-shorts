@@ -125,9 +125,17 @@ export async function assemble(o) {
     // Color sólido lavfi → ya en yuv420p
     vf = `format=yuv420p,fps=${fps},setsar=1`;
   } else if (isVideoBackground) {
-    // Video: escalar y recortar al tamaño exacto
-    vf = `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-         `crop=${width}:${height},format=yuv420p,fps=${fps},setsar=1`;
+    // Video: escalar a 1.08× del target y pan sinusoidal lento (slow zoom cinematic)
+    const vw = Math.round(width  * 1.08);
+    const vh = Math.round(height * 1.08);
+    const vox = Math.round((vw - width)  / 2);
+    const voy = Math.round((vh - height) / 2);
+    const vpx = Math.round(vox * 0.85);
+    const vpy = Math.round(voy * 0.85);
+    vf = `scale=${vw}:${vh}:force_original_aspect_ratio=increase,` +
+         `crop=${vw}:${vh},` +
+         `crop=${width}:${height}:x='${vox}+${vpx}*sin(t*0.03)':y='${voy}+${vpy}*sin(t*0.025+1.0)',` +
+         `format=yuv420p,fps=${fps},setsar=1`;
   } else {
     // Imagen: dos pasos para evitar buffers enormes (ver comentario al inicio).
     // Paso A: scale+crop al target. Para 1920×1920 → max 1920×1920 intermedio.

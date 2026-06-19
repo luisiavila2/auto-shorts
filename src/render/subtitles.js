@@ -137,13 +137,17 @@ export function buildDrawtextVf(clips, opts = {}) {
   const width    = opts.width    || 1080;
   const height   = opts.height   || 1920;
   const vertical = height > width;
-  const fontSize = opts.fontSize || (vertical ? 90 : 66);
+  const fontSize = opts.fontSize || (vertical ? 88 : 64);
   const maxWords = opts.maxWords || (vertical ? 4 : 7);
   const fontFile = opts.fontFile || 'Arial.ttf';
 
-  // Misma posición Y que buildAss (alineación abajo-centro)
-  const marginV  = opts.marginV  ?? Math.round(height * (vertical ? 0.30 : 0.12));
-  const y = height - marginV - fontSize - 4;
+  // Posición: parte baja pero dejando espacio para no cortar
+  const marginV  = opts.marginV  ?? Math.round(height * (vertical ? 0.22 : 0.10));
+  const y = height - marginV - fontSize * 2 - 8;
+
+  // Caja de fondo semitransparente debajo del texto (mejor legibilidad sobre video real)
+  const boxPad   = Math.round(fontSize * 0.35);
+  const lineH    = Math.round(fontSize * 1.25);
 
   const chunked = clips.flatMap(c => chunkClip(c, maxWords));
 
@@ -151,6 +155,7 @@ export function buildDrawtextVf(clips, opts = {}) {
     const start = (c.startMs / 1000).toFixed(3);
     const end   = ((c.startMs + c.durMs) / 1000).toFixed(3);
     const text  = escapeDrawtext(c.text);
+    const en    = `enable='between(t\\,${start}\\,${end})'`;
     // Comas dentro de between() deben escaparse como \, para el parser de filter_complex
     return [
       `drawtext=text='${text}'`,
@@ -159,12 +164,15 @@ export function buildDrawtextVf(clips, opts = {}) {
       `fontcolor=white`,
       `x=(w-tw)/2`,
       `y=${y}`,
-      `borderw=7`,
-      `bordercolor=black@0.95`,
-      `shadowx=3`,
-      `shadowy=3`,
-      `shadowcolor=black@0.7`,
-      `enable='between(t\\,${start}\\,${end})'`,
+      `borderw=6`,
+      `bordercolor=black@1.0`,
+      `shadowx=4`,
+      `shadowy=4`,
+      `shadowcolor=black@0.85`,
+      `box=1`,
+      `boxcolor=black@0.45`,
+      `boxborderw=${boxPad}`,
+      en,
     ].join(':');
   }).join(',');
 }
