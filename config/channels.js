@@ -28,6 +28,8 @@ export const CHANNELS = {
     // Música de fondo (carpeta). Generá pads con: npm run music
     musicDir: 'assets/music',
 
+    watermark: '© Sabiduría Eterna',
+
     youtubeTokenFile: '.tokens/sabiduria.json',
   },
 };

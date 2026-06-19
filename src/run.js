@@ -54,6 +54,7 @@ async function produce(channel, script, slug) {
   await assemble({
     clips, assFile, bgImage: bg.image, music: pickMusic(channel),
     outFile, width, height, gapMs: GAP_MS,
+    watermark: channel.watermark,
   });
 
   fs.writeFileSync(path.join(workDir, 'script.json'), JSON.stringify(script, null, 2));

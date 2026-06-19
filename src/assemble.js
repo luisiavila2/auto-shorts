@@ -94,8 +94,12 @@ export async function assemble(o) {
     vfilter = `format=yuv420p`;
   }
 
-  // viñeta sutil + quemar subtítulos
+  // subtítulos + marca de agua del canal
   vfilter += `,subtitles=subs.ass`;
+  if (o.watermark) {
+    const wm = o.watermark.replace(/'/g, "\\'");
+    vfilter += `,drawtext=text='${wm}':fontsize=${Math.round(width * 0.022)}:fontcolor=white@0.35:x=w-tw-${Math.round(width*0.03)}:y=h-th-${Math.round(height*0.015)}:font=Arial`;
+  }
 
   // 4) audio: voz + música
   args.push('-i', path.resolve(voice));

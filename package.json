@@ -8,6 +8,7 @@
     "run:upload": "node src/run.js --upload",
     "auth": "node scripts/auth-youtube.js",
     "music": "node scripts/make-music.js",
+    "backgrounds": "node scripts/make-backgrounds.js",
     "post-comments": "node src/post-comments.js",
     "tts-test": "node scripts/test-tts.js"
   },
