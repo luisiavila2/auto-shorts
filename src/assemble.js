@@ -1,25 +1,46 @@
 /**
  * assemble.js — Arma el video final con ffmpeg.
  *
- *   fondo (imagen/video/gradiente) + subtítulos ASS + voz + música → MP4
+ *   fondo (imagen/video/gradiente) + subtítulos drawtext + voz + música → MP4
  *
- * TODO de diseño importante (Windows):
- *   - NUNCA usar zoompan (0xC0000005 con imágenes grandes).
- *   - NUNCA mezclar -vf y -filter_complex en el mismo comando (conflicto).
- *   - Imágenes cuadradas (1920×1920) → destino vertical (1080×1920):
- *       scale con force_original_aspect_ratio=increase produce 2400×2400 si se
- *       escala a 1.25× → crash igual que zoompan.
- *       Solución: dos pasos: (1) scale+crop al target exacto, (2) scale×1.06 +
- *       crop animado. Máximo intermedio: 1920×1920 → luego 1145×2035. Seguro.
- *   - Todo en un único -filter_complex para evitar conflictos.
+ * Subtítulos via drawtext (freetype), NO via subtitles=subs.ass (libass).
+ * libass + DirectWrite crashea con 0xC0000005 en este servidor Windows.
+ * drawtext no usa libass → estable en cualquier build de ffmpeg para Windows.
+ *
+ * Nota sobre imágenes cuadradas (1920×1920) → destino vertical (1080×1920):
+ *   Paso A: scale al target exacto → max 1920×1920 de intermedio.
+ *   Paso B: scale×1.06 (≤ 1145×2035) + animated crop.
+ *   Escalar directo a 1.25× produce 2400×2400 → Access Violation.
  */
 import fs from 'fs';
 import path from 'path';
 import { ffmpeg } from './util/ff.js';
+import { buildDrawtextVf } from './render/subtitles.js';
 
-/**
- * Concatena las líneas de voz (mp3) en una pista, con silencio entre cada una.
- */
+// Fuentes candidatas para drawtext (busca la primera disponible)
+const FONT_CANDIDATES = [
+  'C:/Windows/Fonts/Arialbd.ttf',
+  'C:/Windows/Fonts/Arial.ttf',
+  'C:/Windows/Fonts/arial.ttf',
+  'C:/Windows/Fonts/times.ttf',
+  'C:/Windows/Fonts/cour.ttf',
+];
+
+/** Copia la primera fuente disponible al workDir como 'Arial.ttf'. Retorna la ruta relativa. */
+function prepareFont(workDir) {
+  const dest = path.join(workDir, 'Arial.ttf');
+  if (fs.existsSync(dest)) return 'Arial.ttf';
+  for (const src of FONT_CANDIDATES) {
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dest);
+      return 'Arial.ttf';
+    }
+  }
+  // Ninguna fuente encontrada: drawtext intentará con el nombre genérico
+  console.warn('      [warn] No se encontró fuente TTF en Windows/Fonts — usando fallback sans-serif');
+  return null;
+}
+
 async function buildVoiceTrack(clips, workDir, gapMs = 280) {
   const sil = path.join(workDir, 'sil.m4a');
   await ffmpeg([
@@ -45,16 +66,16 @@ async function buildVoiceTrack(clips, workDir, gapMs = 280) {
 
 /**
  * @param {object} o
- *   clips        [{file,text,startMs,durMs}]  (de tts.synthLines)
- *   assFile      ruta al .ass de subtítulos
+ *   clips        [{file,text,startMs,durMs}]
+ *   assFile      ruta al .ass (generado pero no usado en ffmpeg)
  *   bgImage      ruta a imagen/video de fondo (o null → gradiente oscuro)
  *   music        ruta a mp3 de música (o null)
  *   outFile      mp4 de salida
- *   width,height (def 1080×1920 vertical; largo horizontal: 1920×1080)
+ *   width,height (def 1080×1920; largo horizontal: 1920×1080)
  *   fps          (def 30)
  *   musicVolume  (def 0.14)
  *   gapMs        (def 280)
- *   watermark    texto de copyright (ej. '© Sabiduría Eterna')
+ *   watermark    texto copyright (ej. '© Sabiduría Eterna')
  */
 export async function assemble(o) {
   const {
@@ -71,9 +92,8 @@ export async function assemble(o) {
   const last = clips[clips.length - 1];
   const totalSec = (last.startMs + last.durMs) / 1000 + 1.2;
 
-  // 2) Copiar .ass al workDir para que subtitles=subs.ass resuelva con cwd
-  const assLocal = path.join(workDir, 'subs.ass');
-  if (path.resolve(assFile) !== path.resolve(assLocal)) fs.copyFileSync(assFile, assLocal);
+  // 2) Preparar fuente para drawtext (copia Arial.ttf al workDir)
+  const fontFile = prepareFont(workDir);
 
   // 3) Detectar tipo de fondo
   const isVideoBackground = bgImage && /\.(mp4|mov|webm|mkv)$/i.test(bgImage);
@@ -85,70 +105,62 @@ export async function assemble(o) {
 
   // Input 0: fondo
   if (!hasBackground) {
-    // Gradiente sólido oscuro (fallback)
     args.push('-f', 'lavfi', '-i', `color=c=#0D1528:s=${width}x${height}:r=${fps}`);
   } else if (isVideoBackground) {
-    // Video animado en bucle hasta que termine el audio
     args.push('-stream_loop', '-1', '-t', String(Math.ceil(totalSec + 2)), '-i', path.resolve(bgImage));
   } else {
-    // Imagen estática (loop)
     args.push('-loop', '1', '-t', String(Math.ceil(totalSec + 2)), '-i', path.resolve(bgImage));
   }
 
   // Input 1: voz
   args.push('-i', path.resolve(voice));
 
-  // Input 2 (opcional): música en bucle
+  // Input 2 (opcional): música
   if (hasMusic) args.push('-stream_loop', '-1', '-i', path.resolve(music));
 
   // 5) Filtro de video
-  //
-  // Para imágenes: 2 pasos para evitar buffers intermedios enormes (crash en Windows).
-  //   Paso A: scale a exactamente el target + crop centrado → max 1920×1920 de intermedio.
-  //   Paso B: scale×1.06 → animated crop suave. Intermedio ≤ 1145×2035. Seguro.
-  //
-  // Para videos: scale+crop directo (el video ya tiene movimiento, no necesita pan).
-  // Para gradiente lavfi: solo format conversion.
   let vf;
 
   if (!hasBackground) {
+    // Color sólido lavfi → ya en yuv420p
     vf = `format=yuv420p,fps=${fps},setsar=1`;
   } else if (isVideoBackground) {
+    // Video: escalar y recortar al tamaño exacto
     vf = `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-         `crop=${width}:${height},fps=${fps},setsar=1`;
+         `crop=${width}:${height},format=yuv420p,fps=${fps},setsar=1`;
   } else {
-    // Imagen: paso A = scale+crop al target (1080×1920 max), paso B = scale×1.06 + pan suave
-    const pw = Math.round(width  * 1.06);  // ej. 1145
-    const ph = Math.round(height * 1.06);  // ej. 2035
-    const ox = Math.round((pw - width)  / 2);  // ej. 32–33
-    const oy = Math.round((ph - height) / 2);  // ej. 57–58
-    // Pan sinusoidal: centro = ox/oy, swing = 90% del offset → siempre dentro del margen.
-    // x ∈ [ox - px, ox + px] ⊆ [0, pw-width]. Ej: ox=33 px=30 → x ∈ [3, 63] ✓
-    const px = Math.round(ox * 0.9);
+    // Imagen: dos pasos para evitar buffers enormes (ver comentario al inicio).
+    // Paso A: scale+crop al target. Para 1920×1920 → max 1920×1920 intermedio.
+    // Paso B: scale×1.06 (max 1145×2035) + pan sinusoidal centrado.
+    const pw = Math.round(width  * 1.06);
+    const ph = Math.round(height * 1.06);
+    const ox = Math.round((pw - width)  / 2);
+    const oy = Math.round((ph - height) / 2);
+    const px = Math.round(ox * 0.9);   // swing: 90% del offset → nunca sale del rango
     const py = Math.round(oy * 0.9);
     vf =
-      // A) Cubrir target: para imagen cuadrada 1920×1920 → 1920×1920 (intermedio), luego crop 1080×1920
       `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
       `crop=${width}:${height},` +
-      // B) Scale×1.06 (intermedio ≤ 1145×2035), pan sinusoidal lento y centrado
       `scale=${pw}:${ph},` +
       `crop=${width}:${height}:x='${ox}+${px}*sin(t*0.05)':y='${oy}+${py}*sin(t*0.04+0.8)',` +
-      `fps=${fps},setsar=1`;
+      `format=yuv420p,fps=${fps},setsar=1`;
   }
 
-  // format=yuv420p antes de subtitles es CRÍTICO en Windows:
-  // las imágenes JPEG se decodifican como yuvj420p (full-range) y libass/DirectWrite
-  // crashea con 0xC0000005 si recibe ese formato. La conversión explícita lo evita.
-  vf += `,format=yuv420p,subtitles=subs.ass`;
+  // 6) Subtítulos via drawtext (freetype, sin libass — no crashea en Windows)
+  const subtitleVf = buildDrawtextVf(clips, { width, height, fontFile: fontFile || undefined });
+  if (subtitleVf) vf += `,${subtitleVf}`;
+
+  // 7) Watermark / copyright
   if (o.watermark) {
-    const wm = o.watermark.replace(/'/g, "\\'");
-    vf += `,drawtext=text='${wm}':fontsize=${Math.round(width * 0.022)}` +
-          `:fontcolor=white@0.35:x=w-tw-${Math.round(width * 0.03)}` +
-          `:y=h-th-${Math.round(height * 0.015)}:font=Arial`;
+    const wm = escapeDrawtextSimple(o.watermark);
+    const wmFs = Math.round(width * 0.022);
+    const wmX  = `w-tw-${Math.round(width * 0.03)}`;
+    const wmY  = `h-th-${Math.round(height * 0.015)}`;
+    const ff   = fontFile || 'Arial.ttf';
+    vf += `,drawtext=text='${wm}':fontfile='${ff}':fontsize=${wmFs}:fontcolor=white@0.35:x=${wmX}:y=${wmY}`;
   }
 
-  // 6) filter_complex unificado (video + audio en un único grafo)
-  //    Evita el conflicto -vf / -filter_complex que crashea en algunos builds de Windows.
+  // 8) filter_complex unificado (video + audio en un único grafo)
   let fc;
   if (hasMusic) {
     fc = `[0:v]${vf}[vout];` +
@@ -163,12 +175,12 @@ export async function assemble(o) {
   args.push('-filter_complex', fc);
   args.push('-map', '[vout]', '-map', '[aout]');
 
-  // 7) Encoder
+  // 9) Encoder
   const enc = process.env.VIDEO_ENCODER || 'libx264';
   args.push('-t', totalSec.toFixed(2), '-r', String(fps), '-c:v', enc);
-  if (/^libx26[45]$/.test(enc))   args.push('-preset', 'veryfast', '-crf', '21');
+  if (/^libx26[45]$/.test(enc))         args.push('-preset', 'veryfast', '-crf', '21');
   else if (/^(mpeg4|msmpeg4)/.test(enc)) args.push('-q:v', '4');
-  else args.push('-b:v', '6M');
+  else                                    args.push('-b:v', '6M');
   args.push('-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', 'out.mp4');
 
   await ffmpeg(args, { cwd: workDir, timeoutMs: 25 * 60 * 1000 });
@@ -181,4 +193,13 @@ export async function assemble(o) {
     if (fs.existsSync(p)) fs.unlinkSync(p);
   }
   return outFile;
+}
+
+/** Escape mínimo para el watermark (texto fijo, sin caracteres especiales esperados). */
+function escapeDrawtextSimple(text) {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, ''')
+    .replace(/:/g, '\\:')
+    .replace(/%/g, '%%');
 }
