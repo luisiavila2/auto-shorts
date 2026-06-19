@@ -18,7 +18,7 @@ export function ffmpeg(args, { timeoutMs = 20 * 60 * 1000, cwd } = {}) {
     p.on('close', code => {
       clearTimeout(timer);
       if (code === 0) resolve(err);
-      else reject(new Error('ffmpeg exit ' + code + ': ' + err.slice(-600)));
+      else reject(new Error('ffmpeg exit ' + code + ':\n' + err.replace(/\r/g, '\n').slice(-800)));
     });
   });
 }

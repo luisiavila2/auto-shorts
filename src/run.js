@@ -129,7 +129,7 @@ async function runChannel(channelId, { upload, scheduledPublish, only }) {
       state.videos.push(record);
       saveState(channelId, state);
     } catch (e) {
-      console.error(`  [${n + 1}] ERROR:`, e.message);
+      console.error(`\n  [${n + 1}/${jobs.length}] ERROR:\n${(e.message || String(e)).replace(/\r/g, '\n')}\n`);
     }
   }
 }

@@ -89,10 +89,10 @@ export async function assemble(o) {
       `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${width}x${height}:fps=${fps},` +
       `setsar=1`;
   } else {
-    // gradiente cinematográfico generado (fallback sin assets)
-    args.push('-f', 'lavfi', '-i',
-      `gradients=s=${width}x${height}:c0=0x0b1622:c1=0x1c2a3a:x0=0:y0=0:x1=${width}:y1=${height}:d=${Math.ceil(totalSec)}:speed=0.01`);
-    vfilter = `format=yuv420p`;
+    // fondo oscuro generado (fallback sin assets). `color` existe en todo ffmpeg.
+    args.push('-f', 'lavfi', '-i', `color=c=#0D1528:s=${width}x${height}:r=${fps}`);
+    // geq aplica gradiente vertical suave: #0b1622 arriba → #1c2a3a abajo
+    vfilter = `geq=r='11+17*Y/H':g='22+20*Y/H':b='34+24*Y/H',format=yuv420p`;
   }
 
   // viñeta sutil + quemar subtítulos
