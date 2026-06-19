@@ -180,7 +180,11 @@ export async function assemble(o) {
          `[1:a]aformat=sample_rates=44100:channel_layouts=stereo[aout]`;
   }
 
-  args.push('-filter_complex', fc);
+  // Escribir filter_complex a archivo para evitar ENAMETOOLONG en Windows.
+  // El video largo tiene 100+ frases → la cadena supera los 8191 chars del CLI.
+  const fcFile = path.join(workDir, 'filter.txt');
+  fs.writeFileSync(fcFile, fc, 'utf8');
+  args.push('-filter_complex_script', 'filter.txt');
   args.push('-map', '[vout]', '-map', '[aout]');
 
   // 9) Encoder
@@ -196,7 +200,7 @@ export async function assemble(o) {
   const produced = path.join(workDir, 'out.mp4');
   if (path.resolve(produced) !== path.resolve(outFile)) fs.renameSync(produced, outFile);
 
-  for (const f of ['sil.m4a', 'voicelist.txt']) {
+  for (const f of ['sil.m4a', 'voicelist.txt', 'filter.txt']) {
     const p = path.join(workDir, f);
     if (fs.existsSync(p)) fs.unlinkSync(p);
   }
