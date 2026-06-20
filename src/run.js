@@ -140,40 +140,45 @@ async function runChannel(channelId, { upload, scheduledPublish, only }) {
 }
 
 /**
- * Elimina del disco los outputs más antiguos, conservando sólo los últimos keepCount.
- * El slug embebe un timestamp (channelId_kind_TIMESTAMP) → ordena por él.
- * Mantiene el registro en state.json (anti-repetición de títulos), solo borra archivos.
+ * Elimina del disco los outputs más antiguos, conservando solo los últimos keepCount.
+ * Escanea la carpeta output/ directamente (no depende del state) para capturar
+ * también carpetas de runs fallidos que nunca llegaron a guardarse en state.json.
+ * El timestamp está embebido en el nombre: channelId_kind_TIMESTAMP.
  */
 function pruneOldOutputs(channelId, keepCount = 8) {
-  const state = loadState(channelId);
+  const outDir = path.join(process.cwd(), 'output');
+  if (!fs.existsSync(outDir)) return;
 
-  // Solo registros con archivo en disco
-  const withFile = state.videos.filter(v => v.file && v.slug);
+  // Listar carpetas que pertenecen a este canal
+  const dirs = fs.readdirSync(outDir).filter(name => name.startsWith(`${channelId}_`));
 
-  // Ordenar por timestamp embebido en slug (sabiduria_short_1718123456789 → 1718123456789)
-  withFile.sort((a, b) => {
-    const tsA = parseInt(a.slug.split('_').pop()) || 0;
-    const tsB = parseInt(b.slug.split('_').pop()) || 0;
+  // Ordenar por timestamp embebido en el nombre (último segmento separado por _)
+  dirs.sort((a, b) => {
+    const tsA = parseInt(a.split('_').pop()) || 0;
+    const tsB = parseInt(b.split('_').pop()) || 0;
     return tsA - tsB; // ascendente → más viejos primero
   });
 
-  // Los primeros (total - keepCount) se borran
-  const toDelete = withFile.slice(0, Math.max(0, withFile.length - keepCount));
+  const toDelete = dirs.slice(0, Math.max(0, dirs.length - keepCount));
   let deleted = 0;
 
-  for (const record of toDelete) {
-    if (!fs.existsSync(record.file)) { record.file = null; continue; }
-    const outDir = path.dirname(record.file);
+  for (const dir of toDelete) {
+    const full = path.join(outDir, dir);
     try {
-      fs.rmSync(outDir, { recursive: true, force: true });
-      record.file = null;
+      fs.rmSync(full, { recursive: true, force: true });
       deleted++;
-    } catch { /* ya borrado */ }
+    } catch { /* ignorar */ }
   }
 
+  // Limpiar punteros en state.json para carpetas ya borradas
   if (deleted) {
-    saveState(channelId, state);
-    console.log(`  (Limpieza: ${deleted} output(s) viejos borrados, conservados ${keepCount} más recientes)`);
+    const state = loadState(channelId);
+    let changed = false;
+    for (const record of state.videos) {
+      if (record.file && !fs.existsSync(record.file)) { record.file = null; changed = true; }
+    }
+    if (changed) saveState(channelId, state);
+    console.log(`  (Limpieza: ${deleted} carpeta(s) borradas, conservadas ${Math.min(keepCount, dirs.length)} más recientes)`);
   }
 }
 
