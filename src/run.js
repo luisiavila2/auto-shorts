@@ -252,16 +252,69 @@ const args = process.argv.slice(2);
 const upload = args.includes('--upload');
 const scheduledPublish = upload && !args.includes('--no-schedule');
 const only = args.includes('--only-shorts') ? 'shorts' : args.includes('--only-long') ? 'long' : null;
-const reupload = args.includes('--reupload-failed');
-const prune   = args.includes('--prune');
-const channelArg = args.find(a => !a.startsWith('--'));
-const targets = channelArg ? [channelArg] : Object.keys(CHANNELS);
+const reupload    = args.includes('--reupload-failed');
+const prune       = args.includes('--prune');
+const folderIdx   = args.indexOf('--upload-folder');
+const folderArg   = folderIdx !== -1 ? args[folderIdx + 1] : null;
+const channelArg  = args.find(a => !a.startsWith('--'));
+const targets     = channelArg ? [channelArg] : Object.keys(CHANNELS);
 
-if (prune) {
-  // Limpiar outputs viejos manualmente (útil para limpiar acumulación inicial)
+if (folderArg) {
+  // Subir un video ya generado desde una carpeta específica de output/
+  for (const id of targets) {
+    const channel = CHANNELS[id];
+    if (!channel) continue;
+    console.log(`\n=== Canal: ${channel.displayName} ===`);
+
+    const outDir    = path.join(process.cwd(), 'output', folderArg);
+    const videoFile = path.join(outDir, 'video.mp4');
+    const scriptFile= path.join(outDir, 'script.json');
+
+    if (!fs.existsSync(videoFile))  { console.error(`  ✗ No existe: ${videoFile}`);  continue; }
+    if (!fs.existsSync(scriptFile)) { console.error(`  ✗ No existe: ${scriptFile}`); continue; }
+    if (!fs.existsSync(channel.youtubeTokenFile)) { console.error(`  ✗ Sin token OAuth`); continue; }
+
+    const script = JSON.parse(fs.readFileSync(scriptFile, 'utf8'));
+    const isLong = folderArg.includes('_long_');
+    const tags   = isLong
+      ? (script.hashtags || [])
+      : [...new Set(['shorts', ...(script.hashtags || [])])];
+    const publishAt = scheduledPublish ? publishAtFor(isLong ? 'long' : 'short', 0) : null;
+
+    console.log(`  Subiendo: "${script.title}"`);
+    if (publishAt) console.log(`  Publicará: ${new Date(publishAt).toLocaleString()}`);
+    else           console.log(`  Publicando: ahora (público inmediato)`);
+
+    try {
+      const { id: videoId } = await uploadShort(channel, {
+        file: videoFile, title: script.title,
+        description: buildDescription(script), tags, publishAt,
+      });
+
+      // Actualizar o crear entrada en state
+      const state = loadState(id);
+      let rec = state.videos.find(v => v.slug === folderArg);
+      if (!rec) {
+        rec = { slug: folderArg, day: new Date().toISOString().slice(0, 10),
+                kind: isLong ? 'long' : 'short', title: script.title, file: videoFile };
+        state.videos.push(rec);
+      }
+      rec.videoId = videoId;
+      rec.publishAt = publishAt;
+      if (script.pinnedComment) {
+        rec.pendingComment = script.pinnedComment;
+        console.log(`  Comentario en cola: "${script.pinnedComment}"`);
+      }
+      saveState(id, state);
+      console.log(`  ✔ Subido: https://youtube.com/watch?v=${videoId}`);
+    } catch (e) {
+      console.error(`  ✗ Error: ${e.message.split('\n')[0]}`);
+    }
+  }
+} else if (prune) {
   for (const id of targets) {
     const ch = CHANNELS[id];
-    const keep = (ch?.shortsPerDay || 3) + (ch?.longPerDay || 1); // exactamente el último batch
+    const keep = (ch?.shortsPerDay || 3) + (ch?.longPerDay || 1);
     console.log(`\n=== Canal: ${ch?.displayName} — limpiando outputs (conservando últimos ${keep}) ===`);
     pruneOldOutputs(id, keep);
   }
