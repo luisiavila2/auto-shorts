@@ -100,6 +100,16 @@ export async function postComment(channel, videoId, text) {
   return { id: res.data.id };
 }
 
+/** Sube una miniatura personalizada a un video ya subido. */
+export async function setThumbnail(channel, videoId, thumbPath) {
+  const auth = getClient(channel);
+  const yt   = google.youtube({ version: 'v3', auth });
+  await yt.thumbnails.set({
+    videoId,
+    media: { mimeType: 'image/jpeg', body: fs.createReadStream(thumbPath) },
+  });
+}
+
 /** Devuelve el privacyStatus actual de una lista de videos (para saber si ya publicaron). */
 export async function fetchPrivacyStatus(channel, videoIds) {
   if (!videoIds.length) return {};

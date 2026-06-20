@@ -8,7 +8,8 @@ import { buildAss } from './render/subtitles.js';
 import { pickBackground } from './render/visuals.js';
 import { assemble } from './assemble.js';
 import { loadState, saveState, recentTitles } from './planner.js';
-import { uploadShort } from './upload.js';
+import { uploadShort, setThumbnail } from './upload.js';
+import { generateThumbnail } from './render/thumbnail.js';
 import { processPendingComments } from './comments.js';
 
 const OUT = path.join(process.cwd(), 'output');
@@ -123,6 +124,20 @@ async function runChannel(channelId, { upload, scheduledPublish, only }) {
           console.log(`      Comentario en cola: "${script.pinnedComment}"`);
         }
         console.log(`      ✔ Subido: https://youtube.com/watch?v=${id}`);
+
+        // Miniatura personalizada — solo para video largo (los shorts la ignoran)
+        if (job.kind === 'long') {
+          try {
+            console.log('      Generando miniatura…');
+            const thumb = await generateThumbnail(outFile, script.title, {
+              channelName: channel.displayName,
+            });
+            await setThumbnail(channel, id, thumb);
+            console.log('      ✔ Miniatura subida');
+          } catch (te) {
+            console.warn(`      [warn] Miniatura falló: ${te.message.split('\n')[0]}`);
+          }
+        }
       } else {
         console.log(`      ✔ Listo (sin subir): ${outFile}`);
       }
@@ -307,6 +322,19 @@ if (folderArg) {
       }
       saveState(id, state);
       console.log(`  ✔ Subido: https://youtube.com/watch?v=${videoId}`);
+
+      if (isLong) {
+        try {
+          console.log('  Generando miniatura…');
+          const thumb = await generateThumbnail(videoFile, script.title, {
+            channelName: channel.displayName,
+          });
+          await setThumbnail(channel, videoId, thumb);
+          console.log('  ✔ Miniatura subida');
+        } catch (te) {
+          console.warn(`  [warn] Miniatura falló: ${te.message.split('\n')[0]}`);
+        }
+      }
     } catch (e) {
       console.error(`  ✗ Error: ${e.message.split('\n')[0]}`);
     }
