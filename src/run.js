@@ -134,33 +134,46 @@ async function runChannel(channelId, { upload, scheduledPublish, only }) {
     }
   }
 
-  // Limpiar outputs viejos (> 2 días) para no acumular GBs en disco
-  pruneOldOutputs(channelId, 2);
+  // Conservar solo los últimos (shortsPerDay + longPerDay) × 2 outputs en disco
+  const keepCount = ((channel.shortsPerDay || 3) + (channel.longPerDay || 1)) * 2;
+  pruneOldOutputs(channelId, keepCount);
 }
 
 /**
- * Elimina del disco los archivos de output más viejos que keepDays días.
- * Mantiene el registro en el state (para historial de títulos), solo borra el archivo.
- * Así la carpeta output/ nunca acumula GBs de videos viejos.
+ * Elimina del disco los outputs más antiguos, conservando sólo los últimos keepCount.
+ * El slug embebe un timestamp (channelId_kind_TIMESTAMP) → ordena por él.
+ * Mantiene el registro en state.json (anti-repetición de títulos), solo borra archivos.
  */
-function pruneOldOutputs(channelId, keepDays = 2) {
+function pruneOldOutputs(channelId, keepCount = 8) {
   const state = loadState(channelId);
-  const cutoff = new Date(Date.now() - keepDays * 86400 * 1000).toISOString().slice(0, 10);
+
+  // Solo registros con archivo en disco
+  const withFile = state.videos.filter(v => v.file && v.slug);
+
+  // Ordenar por timestamp embebido en slug (sabiduria_short_1718123456789 → 1718123456789)
+  withFile.sort((a, b) => {
+    const tsA = parseInt(a.slug.split('_').pop()) || 0;
+    const tsB = parseInt(b.slug.split('_').pop()) || 0;
+    return tsA - tsB; // ascendente → más viejos primero
+  });
+
+  // Los primeros (total - keepCount) se borran
+  const toDelete = withFile.slice(0, Math.max(0, withFile.length - keepCount));
   let deleted = 0;
-  for (const record of state.videos) {
-    if (!record.day || record.day >= cutoff) continue;       // reciente → conservar
-    if (!record.file || !fs.existsSync(record.file)) continue; // ya no existe
-    // Solo borra si el video fue subido (tiene videoId) O es muy viejo (> keepDays)
+
+  for (const record of toDelete) {
+    if (!fs.existsSync(record.file)) { record.file = null; continue; }
     const outDir = path.dirname(record.file);
     try {
       fs.rmSync(outDir, { recursive: true, force: true });
-      record.file = null; // marcar como limpiado
+      record.file = null;
       deleted++;
-    } catch { /* ignorar si ya fue borrado */ }
+    } catch { /* ya borrado */ }
   }
+
   if (deleted) {
     saveState(channelId, state);
-    console.log(`  (Limpieza: ${deleted} output(s) viejos eliminados del disco)`);
+    console.log(`  (Limpieza: ${deleted} output(s) viejos borrados, conservados ${keepCount} más recientes)`);
   }
 }
 
@@ -242,8 +255,10 @@ const targets = channelArg ? [channelArg] : Object.keys(CHANNELS);
 if (prune) {
   // Limpiar outputs viejos manualmente (útil para limpiar acumulación inicial)
   for (const id of targets) {
-    console.log(`\n=== Canal: ${CHANNELS[id]?.displayName} — limpiando outputs viejos ===`);
-    pruneOldOutputs(id, 2);
+    const ch = CHANNELS[id];
+    const keep = (ch?.shortsPerDay || 3) + (ch?.longPerDay || 1); // exactamente el último batch
+    console.log(`\n=== Canal: ${ch?.displayName} — limpiando outputs (conservando últimos ${keep}) ===`);
+    pruneOldOutputs(id, keep);
   }
 } else if (reupload) {
   for (const id of targets) {
