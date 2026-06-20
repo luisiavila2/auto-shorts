@@ -133,9 +133,38 @@ async function runChannel(channelId, { upload, scheduledPublish, only }) {
       console.error(`\n  [${n + 1}/${jobs.length}] ERROR:\n${(e.message || String(e)).replace(/\r/g, '\n')}\n`);
     }
   }
+
+  // Limpiar outputs viejos (> 2 días) para no acumular GBs en disco
+  pruneOldOutputs(channelId, 2);
 }
 
-/** Sube videos que fueron generados pero no se subieron (sin videoId en state). */
+/**
+ * Elimina del disco los archivos de output más viejos que keepDays días.
+ * Mantiene el registro en el state (para historial de títulos), solo borra el archivo.
+ * Así la carpeta output/ nunca acumula GBs de videos viejos.
+ */
+function pruneOldOutputs(channelId, keepDays = 2) {
+  const state = loadState(channelId);
+  const cutoff = new Date(Date.now() - keepDays * 86400 * 1000).toISOString().slice(0, 10);
+  let deleted = 0;
+  for (const record of state.videos) {
+    if (!record.day || record.day >= cutoff) continue;       // reciente → conservar
+    if (!record.file || !fs.existsSync(record.file)) continue; // ya no existe
+    // Solo borra si el video fue subido (tiene videoId) O es muy viejo (> keepDays)
+    const outDir = path.dirname(record.file);
+    try {
+      fs.rmSync(outDir, { recursive: true, force: true });
+      record.file = null; // marcar como limpiado
+      deleted++;
+    } catch { /* ignorar si ya fue borrado */ }
+  }
+  if (deleted) {
+    saveState(channelId, state);
+    console.log(`  (Limpieza: ${deleted} output(s) viejos eliminados del disco)`);
+  }
+}
+
+/** Sube videos del DÍA DE HOY que fueron generados pero no se subieron (sin videoId). */
 async function reuploadFailed(channelId) {
   const channel = CHANNELS[channelId];
   if (!fs.existsSync(channel.youtubeTokenFile)) {
@@ -143,10 +172,21 @@ async function reuploadFailed(channelId) {
     return;
   }
 
+  const today = new Date().toISOString().slice(0, 10);
   const state = loadState(channelId);
-  const pending = state.videos.filter(v => v.file && !v.videoId);
+  // Solo videos de HOY — evita re-subir intentos viejos de días anteriores
+  const pending = state.videos.filter(v => v.file && !v.videoId && v.day === today);
 
-  if (!pending.length) { console.log('  No hay videos pendientes de subida.'); return; }
+  if (!pending.length) {
+    const totalPending = state.videos.filter(v => v.file && !v.videoId).length;
+    if (totalPending > 0) {
+      console.log(`  No hay videos pendientes de HOY (${today}).`);
+      console.log(`  Hay ${totalPending} video(s) sin subir de días anteriores (ignorados).`);
+    } else {
+      console.log('  No hay videos pendientes de subida.');
+    }
+    return;
+  }
 
   console.log(`  Encontrados ${pending.length} video(s) sin subir:\n`);
 
@@ -195,10 +235,17 @@ const upload = args.includes('--upload');
 const scheduledPublish = upload && !args.includes('--no-schedule');
 const only = args.includes('--only-shorts') ? 'shorts' : args.includes('--only-long') ? 'long' : null;
 const reupload = args.includes('--reupload-failed');
+const prune   = args.includes('--prune');
 const channelArg = args.find(a => !a.startsWith('--'));
 const targets = channelArg ? [channelArg] : Object.keys(CHANNELS);
 
-if (reupload) {
+if (prune) {
+  // Limpiar outputs viejos manualmente (útil para limpiar acumulación inicial)
+  for (const id of targets) {
+    console.log(`\n=== Canal: ${CHANNELS[id]?.displayName} — limpiando outputs viejos ===`);
+    pruneOldOutputs(id, 2);
+  }
+} else if (reupload) {
   for (const id of targets) {
     console.log(`\n=== Canal: ${CHANNELS[id]?.displayName} ===`);
     await reuploadFailed(id);
