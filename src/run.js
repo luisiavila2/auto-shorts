@@ -135,15 +135,77 @@ async function runChannel(channelId, { upload, scheduledPublish, only }) {
   }
 }
 
+/** Sube videos que fueron generados pero no se subieron (sin videoId en state). */
+async function reuploadFailed(channelId) {
+  const channel = CHANNELS[channelId];
+  if (!fs.existsSync(channel.youtubeTokenFile)) {
+    console.log(`  SALTEADO — sin token ${channel.youtubeTokenFile}`);
+    return;
+  }
+
+  const state = loadState(channelId);
+  const pending = state.videos.filter(v => v.file && !v.videoId);
+
+  if (!pending.length) { console.log('  No hay videos pendientes de subida.'); return; }
+
+  console.log(`  Encontrados ${pending.length} video(s) sin subir:\n`);
+
+  for (const record of pending) {
+    if (!fs.existsSync(record.file)) {
+      console.log(`  ✗ Archivo ya no existe: ${record.file}`);
+      continue;
+    }
+    const scriptPath = path.join(path.dirname(record.file), 'script.json');
+    if (!fs.existsSync(scriptPath)) {
+      console.log(`  ✗ Sin script.json para "${record.title}", saltando.`);
+      continue;
+    }
+    const script = JSON.parse(fs.readFileSync(scriptPath, 'utf8'));
+    const isLong = record.kind === 'long';
+    const tags = isLong
+      ? (script.hashtags || [])
+      : [...new Set(['shorts', ...(script.hashtags || [])])];
+    const publishAt = publishAtFor(record.kind, 0);
+
+    console.log(`  Subiendo (${record.kind}): "${record.title}"`);
+    console.log(`    Archivo: ${record.file}`);
+    try {
+      const { id } = await uploadShort(channel, {
+        file: record.file, title: script.title,
+        description: buildDescription(script), tags, publishAt,
+      });
+      record.videoId = id;
+      record.publishAt = publishAt;
+      if (script.pinnedComment) {
+        record.pendingComment = script.pinnedComment;
+        console.log(`    Comentario en cola: "${script.pinnedComment}"`);
+      }
+      saveState(channelId, state);
+      console.log(`    ✔ Subido: https://youtube.com/watch?v=${id}`);
+    } catch (e) {
+      console.error(`    ✗ Error: ${e.message.split('\n')[0]}`);
+    }
+    console.log();
+  }
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const upload = args.includes('--upload');
 const scheduledPublish = upload && !args.includes('--no-schedule');
 const only = args.includes('--only-shorts') ? 'shorts' : args.includes('--only-long') ? 'long' : null;
+const reupload = args.includes('--reupload-failed');
 const channelArg = args.find(a => !a.startsWith('--'));
 const targets = channelArg ? [channelArg] : Object.keys(CHANNELS);
 
-for (const id of targets) {
-  await runChannel(id, { upload, scheduledPublish, only });
+if (reupload) {
+  for (const id of targets) {
+    console.log(`\n=== Canal: ${CHANNELS[id]?.displayName} ===`);
+    await reuploadFailed(id);
+  }
+} else {
+  for (const id of targets) {
+    await runChannel(id, { upload, scheduledPublish, only });
+  }
 }
 console.log('\nListo.');
